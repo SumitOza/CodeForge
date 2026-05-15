@@ -7,6 +7,16 @@ from providers.factory import build_llm
 from models import ProjectPlan, FileSpec, BuildEvent, ReviewResult
 from config import DEFAULT_AGENT_MODELS
 
+import re
+
+def strip_fences(content: str) -> str:
+    """Remove markdown code fences robustly — handles ```python, ```, CRLF, trailing newlines."""
+    content = content.strip()
+    content = re.sub(r'^```[a-zA-Z0-9]*\r?\n', '', content)   # opening fence
+    content = re.sub(r'\r?\n```\s*$', '', content)             # closing fence with preceding newline
+    content = re.sub(r'^```[a-zA-Z0-9]*\s*', '', content)     # bare opening fence fallback
+    content = re.sub(r'\s*```\s*$', '', content)               # bare closing fence fallback
+    return content.strip()
 
 def _build_agent(state: CodeForgeState, agent_name: str, system_prompt: str) -> BaseAgent:
     cfg = state["agent_models"].get(agent_name, DEFAULT_AGENT_MODELS[agent_name])
@@ -86,12 +96,7 @@ Write the complete content of {cf.path}:"""
     try:
         content = await agent.call(prompt)
         # Strip markdown fences before review and save
-        content = content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1] if "\n" in content else ""
-            if content.endswith("```"):
-                content = content.rsplit("```", 1)[0]
-            content = content.strip()
+        content = strip_fences(content)
         cf.content = content
         cf.status = "reviewing"
         events = _emit({**state, "events": events}, BuildEvent(
@@ -169,6 +174,7 @@ Output the complete corrected file:"""
 
     try:
         fixed = await agent.call(prompt)
+        fixed = strip_fences(fixed)
         cf.content = fixed
         cf.retries = attempts
         return {
@@ -186,15 +192,7 @@ async def save_node(state: CodeForgeState) -> dict:
     cf = state["current_file"]
     if not cf or not cf.content:
         return {}
-    content = cf.content.strip()
-    if content.startswith("```"):
-        # Remove opening fence (e.g. ```python or just ```)
-        content = content.split("\n", 1)[1] if "\n" in content else ""
-        # Remove closing fence
-        if content.endswith("```"):
-            content = content.rsplit("```", 1)[0]
-        content = content.strip()
-    cf.content = content
+    cf.content = strip_fences(cf.content)
 
     output_dir = state["output_dir"]
     full_path = os.path.join(output_dir, cf.path)
