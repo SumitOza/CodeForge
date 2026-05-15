@@ -1,0 +1,30 @@
+# Environments
+venv/
+env/
+.venv/
+
+# Environment variables (NEVER COMMIT THIS)
+.env
+.env.local
+
+# CodeForge specific data & databases
+data/
+*.db
+*.sqlite3
+
+# Python cache & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDEs and Editors
+.vscode/
+.cursor/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
