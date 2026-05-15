@@ -118,6 +118,37 @@ async def get_build_session(session_id: str, current_user: dict = Depends(get_cu
         raise HTTPException(status_code=404, detail="Session not found")
     return session
 
+import zipfile, io
+from fastapi.responses import StreamingResponse
+
+@router.get("/sessions/{session_id}/download")
+async def download_session_files(session_id: str, current_user: dict = Depends(get_current_user)):
+    session = await get_session(session_id, current_user["id"])
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session["status"] not in ("done", "failed"):
+        raise HTTPException(status_code=400, detail="Build not complete yet")
+
+    output_dir = _output_dir(current_user["id"], session_id)
+    if not os.path.exists(output_dir) or not os.listdir(output_dir):
+        raise HTTPException(status_code=404, detail="No output files found")
+
+    # Zip everything in memory
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(output_dir):
+            for filename in files:
+                abs_path = os.path.join(root, filename)
+                arc_name = os.path.relpath(abs_path, output_dir)
+                zf.write(abs_path, arc_name)
+    buf.seek(0)
+
+    zip_name = f"codeforge_{session_id[:8]}.zip"
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={zip_name}"}
+    )
 
 @router.websocket("/ws/{session_id}")
 async def ws_stream(websocket: WebSocket, session_id: str):

@@ -29,7 +29,22 @@ def api_delete(path, token=None):
         return r.status_code
     except Exception as e:
         return 500
-
+def get_download_url(token, session_id):
+    """Returns a direct download URL if the session is complete, else an error message."""
+    if not token or not session_id:
+        return None, "No active session."
+    data, code = api_get(f"/build/sessions/{session_id}", token)
+    if code != 200:
+        return None, f"Error: {data.get('detail')}"
+    status = data.get("status", "unknown")
+    if status not in ("done", "failed"):
+        return None, f"Build is still running (status: {status}). Try again when done."
+    files_done = data.get("files_done", [])
+    if not files_done:
+        return None, "No files were generated."
+    # Return the URL — httpx will stream it, Gradio File component handles download
+    url = f"{API}/build/sessions/{session_id}/download?token={token}"
+    return url, f"✅ Ready to download — {len(files_done)} file(s) generated."
 
 # ── Auth handlers ─────────────────────────────────────────────────────────────
 def handle_login(email, password):
@@ -111,12 +126,21 @@ def poll_status(token, session_id):
     files_failed = data.get("files_failed", [])
     tokens = data.get("total_tokens", 0)
     status = data.get("status", "unknown")
+    status_line = f"**Status:** {status}"
+    if status == "done":
+        status_line += " — ✅ Click **Download project files** to get your code!"
+    elif status == "failed":
+        status_line += " — ❌ Some files failed, but completed files are still downloadable."
+
+    done_lines = "\n".join(f"✅ {f}" for f in files_done)
+    failed_lines = "\n".join(f"❌ {f}" for f in files_failed)
+    body = (done_lines + "\n" if done_lines else "") + failed_lines
+
     return (
-        f"**Status:** {status}\n"
+        f"{status_line}\n"
         f"**Files done:** {len(files_done)} | **Failed:** {len(files_failed)}\n"
         f"**Tokens used:** {tokens:,}\n\n"
-        + ("\n".join(f"✅ {f}" for f in files_done))
-        + ("\n".join(f"❌ {f}" for f in files_failed))
+        + body
     )
 
 def load_sessions(token):
@@ -214,6 +238,33 @@ with gr.Blocks(title="CodeForge") as demo:
                 build_status = gr.Markdown("")
                 poll_btn     = gr.Button("Refresh status")
                 build_log    = gr.Markdown("")
+
+                download_btn  = gr.Button("⬇️ Download project files")
+                download_info = gr.Markdown("")
+                download_file = gr.File(label="Project zip", visible=False)
+
+                def handle_download(token, session_id):
+                    url, msg = get_download_url(token, session_id)
+                    if url is None:
+                        return msg, gr.update(visible=False, value=None)
+                    # Fetch the zip and save to a temp file Gradio can serve
+                    import tempfile
+                    headers = {"Authorization": f"Bearer {token}"}
+                    try:
+                        with httpx.stream("GET", url.split("?")[0],
+                                        params={"token": token}, headers=headers,
+                                        timeout=60) as r:
+                            suffix = f"_codeforge_{session_id[:8]}.zip"
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                                for chunk in r.iter_bytes():
+                                    tmp.write(chunk)
+                                tmp_path = tmp.name
+                        return msg, gr.update(visible=True, value=tmp_path)
+                    except Exception as e:
+                        return f"Download failed: {e}", gr.update(visible=False)
+
+                download_btn.click(handle_download, [token_state, session_state],
+                                [download_info, download_file])
 
                 build_btn.click(
                     start_build,
