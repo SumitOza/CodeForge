@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # ── App ───────────────────────────────────────────────────────────────────
     app_name: str           = "CodeForge"
     output_dir: str         = Field(default="/data/output", env="OUTPUT_DIR")
+    checkpoint_dir: str     = Field(default="./data/checkpoints", env="CHECKPOINT_DIR")
     max_retries: int        = 3
     max_tokens: int         = 6000
     request_timeout: int    = 120
@@ -36,8 +37,8 @@ settings = Settings()
 # ── Provider model catalogue ──────────────────────────────────────────────────
 PROVIDER_MODELS = {
     "cerebras": [
-        {"label": "Qwen3-235B (65K)",  "model_id": "qwen-3-235b-a22b-instruct-2507", "context": 65536, "rpm": 1},
-        {"label": "Llama3.1-8B (8K)",  "model_id": "llama3.1-8b",                    "context": 8192,  "rpm": 30},
+        {"label": "Qwen3-235B",  "model_id": "qwen-3-235b-a22b-instruct-2507", "context": 65536, "rpm": 1},
+        {"label": "Llama3.1-8B",  "model_id": "llama3.1-8b", "context": 8192,  "rpm": 30},
     ],
     "groq": [
         {"label": "Llama3.3-70B",      "model_id": "llama-3.3-70b-versatile",        "context": 128000, "rpm": 30},
@@ -57,7 +58,20 @@ PROVIDER_MODELS = {
 DEFAULT_AGENT_MODELS = {
     "architect":   {"provider": "cerebras",    "model_id": "qwen-3-235b-a22b-instruct-2507"},
     "coder":       {"provider": "cerebras",    "model_id": "llama3.1-8b"},
-    "reviewer":    {"provider": "groq",        "model_id": "llama-3.1-8b-instant"},
+    "reviewer":    {"provider": "groq",        "model_id": "llama-3.3-70b-versatile"},
     "fixer":       {"provider": "cerebras",    "model_id": "qwen-3-235b-a22b-instruct-2507"},
-    "filemanager": {"provider": "groq",        "model_id": "llama-3.1-8b-instant"},
+    "filemanager": {"provider": "groq",        "model_id": "llama-3.3-70b-versatile"},
 }
+
+# Legacy IDs (old UI / docs) → current provider API ids
+MODEL_ALIASES = {
+    "cerebras": {
+        "qwen-3-235b-a22b": "qwen-3-235b-a22b-instruct-2507",
+        "llama-3.1-8b": "llama3.1-8b",
+        "llama3.1-8b-instant": "llama3.1-8b",  # groq-style name sent to cerebras
+    },
+}
+
+
+def normalize_model_id(provider: str, model_id: str) -> str:
+    return MODEL_ALIASES.get(provider, {}).get(model_id, model_id)

@@ -20,9 +20,7 @@ class BaseAgent:
         ]
         for attempt in range(max_retries):
             try:
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: self.llm.invoke(messages)
-                )
+                response = await self.llm.ainvoke(messages)
                 if hasattr(response, "usage_metadata") and response.usage_metadata:
                     self.last_usage.input_tokens  = response.usage_metadata.get("input_tokens", 0)
                     self.last_usage.output_tokens = response.usage_metadata.get("output_tokens", 0)

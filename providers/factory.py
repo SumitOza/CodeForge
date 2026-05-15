@@ -1,7 +1,7 @@
 """providers/factory.py — build LangChain LLM from provider + model choice + user API keys."""
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
-from config import settings, PROVIDER_MODELS
+from config import settings, PROVIDER_MODELS, normalize_model_id
 from typing import Optional
 
 
@@ -10,6 +10,8 @@ def build_llm(provider: str, model_id: str, api_key: Optional[str] = None, tempe
     Return a LangChain chat model for the given provider.
     api_key: user's stored key (decrypted). Falls back to env vars if None.
     """
+    model_id = normalize_model_id(provider, model_id)
+
     if provider == "cerebras":
         key = api_key or settings.__dict__.get("cerebras_api_key")
         return ChatOpenAI(

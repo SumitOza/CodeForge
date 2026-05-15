@@ -4,12 +4,11 @@ from models import BuildRequest, BuildSession
 from database import (create_session, update_session, get_session,
                       list_sessions, get_decrypted_key, increment_user_stats, log_token_usage)
 from auth import get_current_user, decode_token
-from graph.builder import build_graph
-from config import settings, DEFAULT_AGENT_MODELS
-import os, uuid, json, asyncio
+from graph.runtime import get_graph
+from config import settings, DEFAULT_AGENT_MODELS, normalize_model_id
+import os, uuid, json, asyncio, time
 
 router = APIRouter(prefix="/build", tags=["build"])
-graph = build_graph()
 
 
 def _output_dir(user_id: str, session_id: str) -> str:
@@ -37,13 +36,15 @@ async def start_build(body: BuildRequest, current_user: dict = Depends(get_curre
             detail="No API keys found. Add at least one provider key in Settings → API Keys."
         )
 
-    # Merge user model choices with defaults
+    # Merge user model choices with defaults; remap deprecated model ids
     agent_models = {}
     for agent in ["architect", "coder", "reviewer", "fixer", "filemanager"]:
         if body.agent_models and agent in body.agent_models:
-            agent_models[agent] = body.agent_models[agent]
+            cfg = dict(body.agent_models[agent])
         else:
-            agent_models[agent] = DEFAULT_AGENT_MODELS[agent]
+            cfg = dict(DEFAULT_AGENT_MODELS[agent])
+        cfg["model_id"] = normalize_model_id(cfg["provider"], cfg["model_id"])
+        agent_models[agent] = cfg
 
     # Validate chosen providers have keys
     for agent, cfg in agent_models.items():
@@ -88,19 +89,20 @@ async def _run_build(session_id: str, user_id: str, prompt: str, agent_models: d
         "error": None,
     }
     try:
+        graph = await get_graph()
         config = {"configurable": {"thread_id": session_id}}
-        final_state = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: graph.invoke(initial_state, config=config)
-        )
+        final_state = await graph.ainvoke(initial_state, config=config)
         status = "failed" if final_state.get("error") else "done"
         await update_session(session_id, {
             "status": status,
             "files_done": list(final_state.get("completed_files", {}).keys()),
             "total_tokens": final_state.get("total_tokens", 0),
-            "completed_at": __import__("time").time(),
+            "completed_at": time.time(),
         })
         await increment_user_stats(user_id, tokens=final_state.get("total_tokens", 0))
-    except Exception as e:
+    except Exception:
+        import traceback
+        traceback.print_exc()
         await update_session(session_id, {"status": "failed"})
 
 
@@ -128,9 +130,9 @@ async def ws_stream(websocket: WebSocket, session_id: str):
         payload = decode_token(token)
         user_id = payload["sub"]
 
-        # Stream events from LangGraph checkpoint
+        graph = await get_graph()
         config = {"configurable": {"thread_id": session_id}}
-        for event in graph.stream(None, config=config):
+        async for event in graph.astream(None, config=config):
             for node_name, state in event.items():
                 events = state.get("events", [])
                 for e in events:

@@ -1,11 +1,20 @@
 """main.py — CodeForge FastAPI application entrypoint."""
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.auth_router import router as auth_router
 from routers.keys_router import router as keys_router
 from routers.build_router import router as build_router
+from graph.runtime import close_graph
 from config import settings
 import os
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await close_graph()
+
 
 app = FastAPI(
     title="CodeForge API",
@@ -13,6 +22,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

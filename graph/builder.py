@@ -1,14 +1,11 @@
 """graph/builder.py — assembles the CodeForge LangGraph state machine."""
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite import SqliteSaver
 from graph.state import CodeForgeState
 from graph.nodes import (
     plan_node, pick_file_node, code_node, review_node,
     fix_node, save_node, mark_failed_node
 )
 from config import settings
-import os
-import sqlite3
 
 
 def should_continue_coding(state: CodeForgeState) -> str:
@@ -34,12 +31,8 @@ def should_loop_or_done(state: CodeForgeState) -> str:
     return "pick" if pending else "done"
 
 
-def build_graph(checkpoint_dir: str = "/data/checkpoints"):
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    db_path = os.path.join(checkpoint_dir, "codeforge.db")
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    saver = SqliteSaver(conn)
-
+def compile_graph(checkpointer=None):
+    """Build and compile the state graph. Pass an AsyncSqliteSaver from runtime.get_graph()."""
     graph = StateGraph(CodeForgeState)
 
     graph.add_node("plan",        plan_node)
@@ -60,4 +53,4 @@ def build_graph(checkpoint_dir: str = "/data/checkpoints"):
     graph.add_conditional_edges("save",        should_loop_or_done, {"pick": "pick", "done": END})
     graph.add_conditional_edges("mark_failed", should_loop_or_done, {"pick": "pick", "done": END})
 
-    return graph.compile(checkpointer=SqliteSaver(saver))
+    return graph.compile(checkpointer=checkpointer)
