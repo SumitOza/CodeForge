@@ -41,7 +41,9 @@ RULES:
 - Add a module-level docstring explaining the file's purpose.
 - Follow the language's style conventions.
 - Pydantic schemas must validate all boundaries.
-- Output ONLY the file content. No explanation, no markdown fences."""
+- Output ONLY the raw file content. Absolutely no markdown fences, no ```python, no ``` of any kind.
+- The very first character of your response must be the first character of the file (e.g. a shebang, import, or comment).
+- If you add any markdown formatting, the build will break."""
 
 
 REVIEWER_PROMPT = """You are the Reviewer agent in CodeForge. Your job: check code quality.
@@ -78,7 +80,8 @@ RULES:
 - Output ONLY the complete corrected file content.
 - No markdown fences. No explanation. Just the fixed code.
 - If an import is missing, add it. If a function is missing, implement it.
-- Preserve all existing working logic."""
+- Preserve all existing working logic.
+- Output ONLY the complete corrected file content. No markdown fences. No ```. Raw code only."""
 
 
 FILEMANAGER_PROMPT = """You are the FileManager agent in CodeForge. Your job: determine the correct file path.

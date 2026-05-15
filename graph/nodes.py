@@ -85,6 +85,13 @@ Write the complete content of {cf.path}:"""
 
     try:
         content = await agent.call(prompt)
+        # Strip markdown fences before review and save
+        content = content.strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else ""
+            if content.endswith("```"):
+                content = content.rsplit("```", 1)[0]
+            content = content.strip()
         cf.content = content
         cf.status = "reviewing"
         events = _emit({**state, "events": events}, BuildEvent(
@@ -179,6 +186,15 @@ async def save_node(state: CodeForgeState) -> dict:
     cf = state["current_file"]
     if not cf or not cf.content:
         return {}
+    content = cf.content.strip()
+    if content.startswith("```"):
+        # Remove opening fence (e.g. ```python or just ```)
+        content = content.split("\n", 1)[1] if "\n" in content else ""
+        # Remove closing fence
+        if content.endswith("```"):
+            content = content.rsplit("```", 1)[0]
+        content = content.strip()
+    cf.content = content
 
     output_dir = state["output_dir"]
     full_path = os.path.join(output_dir, cf.path)
