@@ -53,15 +53,21 @@ Review the provided code file for:
 2. Undefined variables or functions referenced but not defined
 3. Type mismatches (e.g. passing str where int expected)
 4. Schema/model inconsistencies with the project plan
-5. Obvious logic errors (infinite loops, unreachable code)
+5. Obvious logic errors (infinite loops, unreachable code, off-by-one errors)
 6. Missing error handling on critical operations
+7. Algorithmic correctness — for any function that produces visual, geometric, or
+   computed output, mentally trace it with a small concrete input and verify:
+   - For shapes: trace rows 0, 1, 2 and check character counts match the geometry
+   - For calculations: verify boundary values (0, 1, n-1, n) produce correct results
+   - For spacing/padding: verify multipliers produce the right number of characters
+   Example: '*' + '  ' * k + '*' produces 2k interior spaces, not k — flag this
+   if the geometry requires exactly k spaces.
 
 OUTPUT FORMAT — respond with ONLY valid JSON:
 {
   "passed": true | false,
   "issues": [
-    "line 12: requests imported but not in requirements.txt",
-    "function save_file() called but not defined in this file"
+    "print_hollow_triangle row i uses '  ' * (2*i-1) producing 2*(2i-1) spaces but equilateral triangle needs exactly 2*i-1 interior spaces — change to ' ' * (2*i-1)"
   ]
 }
 
