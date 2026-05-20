@@ -2,21 +2,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
-"""config.py — centralised settings. All secrets via environment variables."""
-from pydantic_settings import BaseSettings
-from pydantic import Field
-from typing import Optional
-
-# ── validate cloud-only required fields ───────────────────────────────────────
-if not settings.is_local:
-    missing = [f for f, v in [
-        ("SUPABASE_URL", settings.supabase_url),
-        ("SUPABASE_SERVICE_KEY", settings.supabase_service_key),
-        ("ENCRYPTION_KEY", settings.encryption_key),
-    ] if not v]
-    if missing:
-        raise ValueError(f"Missing required env vars for cloud mode: {missing}")
-
 
 class Settings(BaseSettings):
     # ── Mode ──────────────────────────────────────────────────────────────────
@@ -55,6 +40,16 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# ── validate cloud-only required fields ───────────────────────────────────────
+if not settings.is_local:
+    missing = [f for f, v in [
+        ("SUPABASE_URL", settings.supabase_url),
+        ("SUPABASE_SERVICE_KEY", settings.supabase_service_key),
+        ("ENCRYPTION_KEY", settings.encryption_key),
+    ] if not v]
+    if missing:
+        raise ValueError(f"Missing required env vars for cloud mode: {missing}")
 
 # ── Provider model catalogue ──────────────────────────────────────────────────
 PROVIDER_MODELS = {

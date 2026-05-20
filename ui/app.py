@@ -198,6 +198,7 @@ with gr.Blocks(title="CodeForge") as demo:
                 re_err   = gr.Markdown("")
 
     # ── Main app ──────────────────────────────────────────────────────────────
+    context_files_state = gr.State({})
     with gr.Group(visible=False) as app_panel:
         with gr.Row():
             gr.Markdown("### CodeForge")
