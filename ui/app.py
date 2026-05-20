@@ -3,6 +3,7 @@ import gradio as gr
 import httpx, json, os, threading, time
 from config import PROVIDER_MODELS, DEFAULT_AGENT_MODELS
 
+IS_LOCAL = os.getenv("MODE", "cloud") == "local"
 API = os.getenv("API_BASE", "http://localhost:8000/api")
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ def remove_key(token, provider):
 
 
 # ── Build handlers ────────────────────────────────────────────────────────────
-def start_build(token, prompt, arch_p, arch_m, cod_p, cod_m, rev_p, rev_m, fix_p, fix_m):
+def start_build(token, prompt, arch_p, arch_m, cod_p, cod_m, rev_p, rev_m, fix_p, fix_m,context_files=None):
     if not token:
         return "Please log in first.", ""
     agent_models = {
@@ -111,7 +112,10 @@ def start_build(token, prompt, arch_p, arch_m, cod_p, cod_m, rev_p, rev_m, fix_p
         "fixer":       {"provider": fix_p,  "model_id": fix_m},
         "filemanager": {"provider": rev_p,  "model_id": rev_m},
     }
-    data, code = api_post("/build/start", {"prompt": prompt, "agent_models": agent_models}, token)
+    body = {"prompt": prompt, "agent_models": agent_models}
+    if context_files:
+        body["context_files"] = context_files
+    data, code = api_post("/build/start", body, token)
     if code == 202:
         return f"Build started! Session: `{data['session_id']}`", data["session_id"]
     return f"Error: {data.get('detail')}", ""
@@ -179,7 +183,7 @@ with gr.Blocks(title="CodeForge") as demo:
     status_bar = gr.Markdown("")
 
     # ── Auth panel ────────────────────────────────────────────────────────────
-    with gr.Group(visible=True) as auth_panel:
+    with gr.Group(visible=not IS_LOCAL) as auth_panel:
         with gr.Tabs():
             with gr.Tab("Login"):
                 li_email = gr.Textbox(label="Email", placeholder="you@example.com")
@@ -268,7 +272,8 @@ with gr.Blocks(title="CodeForge") as demo:
 
                 build_btn.click(
                     start_build,
-                    [token_state, prompt_in, arch_p, arch_m, cod_p, cod_m, rev_p, rev_m, fix_p, fix_m],
+                    [token_state, prompt_in, arch_p, arch_m, cod_p, cod_m,
+                    rev_p, rev_m, fix_p, fix_m, context_files_state],
                     [build_status, session_state]
                 )
                 poll_btn.click(poll_status, [token_state, session_state], build_log)
@@ -290,9 +295,77 @@ with gr.Blocks(title="CodeForge") as demo:
 
             # History tab
             with gr.Tab("Build history"):
-                refresh_hist = gr.Button("Refresh")
-                history_display = gr.Markdown("")
-                refresh_hist.click(load_sessions, token_state, history_display)
+                if IS_LOCAL:
+                    with gr.Tab("Workspace"):
+                        gr.Markdown("### Local file workspace")
+                        workspace_root = gr.Textbox(
+                            label="Project folder",
+                            placeholder="/Users/you/myproject",
+                            value=os.path.expanduser(os.getenv("LOCAL_WORKSPACE", "~/codeforge-workspace")),
+                        )
+                        context_files_state = gr.State({})
+
+                        with gr.Row():
+                            load_btn = gr.Button("Load folder", variant="primary")
+                            refresh_btn = gr.Button("Refresh")
+
+                        file_list = gr.Dropdown(label="Files", choices=[], interactive=True)
+                        
+                        with gr.Row():
+                            file_editor = gr.Code(label="File content", language="python", lines=25)
+
+                        with gr.Row():
+                            save_btn       = gr.Button("💾 Save file")
+                            run_btn        = gr.Button("▶ Run file")
+                            add_ctx_btn    = gr.Button("+ Add to agent context")
+                        
+                        workspace_msg = gr.Markdown("")
+                        run_output    = gr.Textbox(label="Run output", lines=8, visible=False)
+                        ctx_display   = gr.Markdown("")
+
+                        # ── workspace handlers ────────────────────────────────────────────
+                        def load_folder(root, token):
+                            data, code = api_get(f"/workspace/tree?root={root}", token)
+                            if code != 200:
+                                return gr.update(choices=[]), f"Error: {data.get('detail')}"
+                            files = [f["relative"] for f in data if not f["is_dir"]]
+                            return gr.update(choices=files, value=files[0] if files else None), f"Loaded {len(files)} files"
+
+                        def open_file(rel_path, root, token):
+                            if not rel_path or not root:
+                                return gr.update()
+                            full = os.path.join(os.path.expanduser(root), rel_path)
+                            data, code = api_get(f"/workspace/file?path={full}", token)
+                            if code != 200:
+                                return gr.update(value=f"# Error reading file: {data.get('detail')}")
+                            ext = os.path.splitext(rel_path)[1].lstrip(".")
+                            lang = {"py":"python","js":"javascript","ts":"typescript",
+                                    "json":"json","md":"markdown","sh":"bash"}.get(ext, "python")
+                            return gr.update(value=data, language=lang)
+
+                        def save_file(content, rel_path, root, token):
+                            if not rel_path:
+                                return "No file selected."
+                            full = os.path.join(os.path.expanduser(root), rel_path)
+                            _, code = api_post("/workspace/file", {"path": full, "content": content}, token)
+                            return "✅ Saved." if code == 200 else "❌ Save failed."
+
+                        def run_file(rel_path, root, token):
+                            if not rel_path:
+                                return gr.update(value="No file selected.", visible=True)
+                            full = os.path.join(os.path.expanduser(root), rel_path)
+                            data, code = api_post("/workspace/run", {"path": full}, token)
+                            if code != 200:
+                                return gr.update(value=f"Error: {data.get('detail')}", visible=True)
+                            out = (data.get("stdout") or "") + (data.get("stderr") or "")
+                            return gr.update(value=out or "(no output)", visible=True)
+
+                        def add_to_context(content, rel_path, ctx):
+                            if not rel_path:
+                                return ctx, "No file selected."
+                            ctx = {**ctx, rel_path: content}
+                            names = ", ".join(ctx.keys())
+                            return ctx, f"Context: {names}"
 
     # ── Auth wiring ───────────────────────────────────────────────────────────
     auth_outputs = [token_state, user_name, user_email, auth_panel, app_panel, status_bar, li_err]
@@ -307,6 +380,17 @@ with gr.Blocks(title="CodeForge") as demo:
     token_state.change(lambda t: (load_keys(t), load_sessions(t)),
                      token_state, [keys_display, history_display])
 
+def _local_auto_login():
+    """Return a fake token for local mode — auth is bypassed server-side."""
+    return ("local-token", "Local User", "local@codeforge",
+            gr.update(visible=False), gr.update(visible=True),
+            "Running in local mode", "")
+
+if IS_LOCAL:
+    demo.load(_local_auto_login, outputs=[
+        token_state, user_name, user_email,
+        auth_panel, app_panel, status_bar, li_err
+    ])
 
 if __name__ == "__main__":
     import subprocess, threading

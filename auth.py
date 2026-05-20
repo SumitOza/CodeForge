@@ -38,7 +38,12 @@ def decode_token(token: str) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 
 
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> dict:
+    from config import settings
+    if settings.is_local:
+        from database_local import LOCAL_USER
+        return LOCAL_USER
     payload = decode_token(credentials.credentials)
     user = await get_user_by_id(payload["sub"])
     if not user:
@@ -48,6 +53,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(b
 
 # Optional auth — returns None if no token provided
 async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))) -> Optional[dict]:
+    from config import settings
+    if settings.is_local:
+        from database_local import LOCAL_USER
+        return LOCAL_USER
     if not credentials:
         return None
     try:

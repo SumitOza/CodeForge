@@ -2,30 +2,52 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
+"""config.py — centralised settings. All secrets via environment variables."""
+from pydantic_settings import BaseSettings
+from pydantic import Field
+from typing import Optional
+
+# ── validate cloud-only required fields ───────────────────────────────────────
+if not settings.is_local:
+    missing = [f for f, v in [
+        ("SUPABASE_URL", settings.supabase_url),
+        ("SUPABASE_SERVICE_KEY", settings.supabase_service_key),
+        ("ENCRYPTION_KEY", settings.encryption_key),
+    ] if not v]
+    if missing:
+        raise ValueError(f"Missing required env vars for cloud mode: {missing}")
 
 
 class Settings(BaseSettings):
-    # ── Supabase ──────────────────────────────────────────────────────────────
-    supabase_url: str       = Field(..., env="SUPABASE_URL")
-    supabase_anon_key: str  = Field(..., env="SUPABASE_ANON_KEY")
-    supabase_service_key: str = Field(..., env="SUPABASE_SERVICE_KEY")
-    database_url: str       = Field(..., env="DATABASE_URL")
+    # ── Mode ──────────────────────────────────────────────────────────────────
+    mode: str = Field(default="cloud", env="MODE")  # "cloud" or "local"
+    local_workspace: str = Field(default="~/codeforge-workspace", env="LOCAL_WORKSPACE")
+
+    # ── Supabase (required in cloud, ignored in local) ─────────────────────────
+    supabase_url: str         = Field(default="", env="SUPABASE_URL")
+    supabase_anon_key: str    = Field(default="", env="SUPABASE_ANON_KEY")
+    supabase_service_key: str = Field(default="", env="SUPABASE_SERVICE_KEY")
+    database_url: str         = Field(default="", env="DATABASE_URL")
 
     # ── JWT ───────────────────────────────────────────────────────────────────
-    jwt_secret: str         = Field(..., env="JWT_SECRET")
+    jwt_secret: str         = Field(default="local-dev-secret-change-me", env="JWT_SECRET")
     jwt_algorithm: str      = "HS256"
     jwt_expire_minutes: int = 1440  # 24h
 
     # ── Encryption key for stored API keys ────────────────────────────────────
-    encryption_key: str     = Field(..., env="ENCRYPTION_KEY")
+    encryption_key: str = Field(default="", env="ENCRYPTION_KEY")
 
     # ── App ───────────────────────────────────────────────────────────────────
-    app_name: str           = "CodeForge"
-    output_dir: str         = Field(default="/data/output", env="OUTPUT_DIR")
-    checkpoint_dir: str     = Field(default="./data/checkpoints", env="CHECKPOINT_DIR")
-    max_retries: int        = 3
-    max_tokens: int         = 6000
-    request_timeout: int    = 120
+    app_name: str       = "CodeForge"
+    output_dir: str     = Field(default="/data/output", env="OUTPUT_DIR")
+    checkpoint_dir: str = Field(default="./data/checkpoints", env="CHECKPOINT_DIR")
+    max_retries: int    = 3
+    max_tokens: int     = 6000
+    request_timeout: int = 120
+
+    @property
+    def is_local(self) -> bool:
+        return self.mode == "local"
 
     class Config:
         env_file = ".env"

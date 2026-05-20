@@ -37,6 +37,11 @@ app.include_router(auth_router,  prefix="/api")
 app.include_router(keys_router,  prefix="/api")
 app.include_router(build_router, prefix="/api")
 
+from config import settings as _settings
+if _settings.is_local:
+    from routers.workspace_router import router as workspace_router
+    app.include_router(workspace_router, prefix="/api")
+
 os.makedirs(settings.output_dir, exist_ok=True)
 
 
