@@ -296,6 +296,9 @@ with gr.Blocks(title="CodeForge") as demo:
 
             # History tab
             with gr.Tab("Build history"):
+                history_display = gr.Markdown("")
+                refresh_history_btn = gr.Button("Refresh history")
+                refresh_history_btn.click(load_sessions, token_state, history_display)
                 if IS_LOCAL:
                     with gr.Tab("Workspace"):
                         gr.Markdown("### Local file workspace")
