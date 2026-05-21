@@ -16,24 +16,27 @@ def api_post(path, body, token=None):
     except Exception as e:
         return {"detail": str(e)}, 500
 
+def api_post(path, body, token=None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        r = httpx.post(f"{API}{path}", json=body, headers=headers, timeout=30)
+        try:
+            return r.json(), r.status_code
+        except Exception:
+            return {"detail": f"Server error ({r.status_code}): {r.text[:200]}"}, r.status_code
+    except Exception as e:
+        return {"detail": str(e)}, 500
+
 def api_get(path, token=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
         r = httpx.get(f"{API}{path}", headers=headers, timeout=15)
-        return r.json(), r.status_code
+        try:
+            return r.json(), r.status_code
+        except Exception:
+            return {"detail": f"Server error ({r.status_code}): {r.text[:200]}"}, r.status_code
     except Exception as e:
         return {"detail": str(e)}, 500
-
-def api_get_text(path, token=None):
-    """GET that returns raw text (for file content)."""
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
-    try:
-        r = httpx.get(f"{API}{path}", headers=headers, timeout=15)
-        if r.status_code == 200:
-            return r.text, 200
-        return r.json().get("detail", "Error"), r.status_code
-    except Exception as e:
-        return str(e), 500
 
 def api_delete(path, token=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}

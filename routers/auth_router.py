@@ -9,12 +9,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 async def register(body: RegisterRequest):
-    existing = await get_user_by_email(body.email)
-    if existing:
-        raise HTTPException(status_code=409, detail="Email already registered")
-
-    hashed = hash_password(body.password)
-    user = await create_user(body.email, hashed, body.full_name)
+    user = await get_user_by_email(body.email)
+    # Guard: if hashed_password is missing or empty, treat as not found
+    if not user or not user.get("hashed_password"):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not verify_password(body.password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = create_access_token(user["id"], user["email"])
     return TokenResponse(
