@@ -280,7 +280,7 @@ def update_model_choices(provider):
 
 
 # ── Gradio UI ─────────────────────────────────────────────────────────────────
-with gr.Blocks(title="CodeForge", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="CodeForge") as demo:
 
     # ── Persistent state ──────────────────────────────────────────────────────
     token_state         = gr.State("")
@@ -490,7 +490,7 @@ with gr.Blocks(title="CodeForge", theme=gr.themes.Soft()) as demo:
             outputs=[token_state, user_name, user_email,
                      auth_panel, app_panel, status_bar, li_err],
         )
-
+    demo.launch(server_name="0.0.0.0", server_port=7860, share=False, theme=gr.themes.Soft())
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
