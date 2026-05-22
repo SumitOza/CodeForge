@@ -4,7 +4,8 @@ import httpx, json, os, subprocess, threading, time
 
 from config import PROVIDER_MODELS, DEFAULT_AGENT_MODELS
 
-IS_LOCAL = os.getenv("MODE", "cloud") == "local"
+from config import settings as _cfg
+IS_LOCAL = _cfg.is_local
 API = os.getenv("API_BASE", "http://localhost:8000/api")
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -215,6 +216,17 @@ def load_folder(root, token):
         return gr.update(choices=[]), f"❌ Error: {data.get('detail') if isinstance(data, dict) else data}"
     files = [f["relative"] for f in data if not f["is_dir"]]
     return gr.update(choices=files, value=files[0] if files else None), f"Loaded {len(files)} files from {root}"
+
+def api_get_text(path, token=None):
+    """GET that returns raw text (for file content)."""
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        r = httpx.get(f"{API}{path}", headers=headers, timeout=15)
+        if r.status_code == 200:
+            return r.text, 200
+        return r.json().get("detail", "Error"), r.status_code
+    except Exception as e:
+        return str(e), 500
 
 def open_file(rel_path, root, token):
     if not rel_path or not root:
@@ -490,7 +502,6 @@ with gr.Blocks(title="CodeForge") as demo:
             outputs=[token_state, user_name, user_email,
                      auth_panel, app_panel, status_bar, li_err],
         )
-    demo.launch(server_name="0.0.0.0", server_port=7860, share=False, theme=gr.themes.Soft())
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
