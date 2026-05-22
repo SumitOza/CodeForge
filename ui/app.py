@@ -1,22 +1,15 @@
 """ui/app.py — Gradio web UI for CodeForge (hybrid cloud/local mode)."""
 import gradio as gr
 import httpx, json, os, subprocess, threading, time
-
 from config import PROVIDER_MODELS, DEFAULT_AGENT_MODELS
-
 from config import settings as _cfg
+from concurrent.futures import ThreadPoolExecutor
+
+_executor = ThreadPoolExecutor(max_workers=4)
 IS_LOCAL = _cfg.is_local
 API = os.getenv("API_BASE", "http://localhost:8000/api")
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
-def api_post(path, body, token=None):
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
-    try:
-        r = httpx.post(f"{API}{path}", json=body, headers=headers, timeout=30)
-        return r.json(), r.status_code
-    except Exception as e:
-        return {"detail": str(e)}, 500
-
 def api_post(path, body, token=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
@@ -389,7 +382,7 @@ with gr.Blocks(title="CodeForge") as demo:
                                    [download_info, download_file])
 
             # ── API Keys tab ─────────────────────────────────────────────────
-            with gr.Tab("API Keys"):
+            with gr.Tab("API Keys") as keys_tab:
                 gr.Markdown("Your keys are stored AES-256 encrypted. Only previews are shown.")
                 keys_display = gr.Markdown("")
                 with gr.Row():
@@ -404,7 +397,7 @@ with gr.Blocks(title="CodeForge") as demo:
                 remove_key_btn.click(remove_key, [token_state, key_provider],            [key_msg, keys_display])
 
             # ── Build history tab ─────────────────────────────────────────────
-            with gr.Tab("Build history"):
+            with gr.Tab("Build history") as history_tab:
                 refresh_hist    = gr.Button("Refresh")
                 history_display = gr.Markdown("")
                 refresh_hist.click(load_sessions, token_state, history_display)
@@ -475,12 +468,13 @@ with gr.Blocks(title="CodeForge") as demo:
                         [file_list, context_files_state],
                         [context_files_state, ctx_display],
                     )
-
+            keys_tab.select(lambda t: load_keys(t), token_state, keys_display)
+            history_tab.select(lambda t: load_sessions(t), token_state, history_display)
     # ── Auth wiring ───────────────────────────────────────────────────────────
     auth_outputs = [token_state, user_name, user_email,
                     auth_panel, app_panel, status_bar, li_err]
 
-    li_btn.click(handle_login,    [li_email, li_pass],           auth_outputs)
+    li_btn.click(handle_login, [li_email, li_pass], auth_outputs)
     re_btn.click(handle_register, [re_name, re_email, re_pass],
                  [token_state, user_name, user_email,
                   auth_panel, app_panel, status_bar, re_err])
@@ -488,12 +482,7 @@ with gr.Blocks(title="CodeForge") as demo:
                      [token_state, user_name, user_email,
                       auth_panel, app_panel, status_bar, li_err])
 
-    # Reload keys + history when token changes (after login)
-    token_state.change(
-        lambda t: (load_keys(t), load_sessions(t)),
-        token_state,
-        [keys_display, history_display],
-    )
+    
 
     # Auto-login in local mode
     if IS_LOCAL:
