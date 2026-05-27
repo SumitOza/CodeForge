@@ -502,5 +502,5 @@ if __name__ == "__main__":
         daemon=True,
     )
     api_thread.start()
-    time.sleep(2)
+    time.sleep(5)
     demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
