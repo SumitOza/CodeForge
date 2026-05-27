@@ -1,12 +1,9 @@
 ---
 title: CodeForge
-emoji: 🦀
-colorFrom: red
-colorTo: green
-sdk: gradio
-sdk_version: 6.14.0
-python_version: '3.13'
-app_file: app.py
+emoji: ⚙️
+colorFrom: orange
+colorTo: gray
+sdk: docker
 pinned: false
 license: mit
 ---
