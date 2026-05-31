@@ -92,6 +92,10 @@ async def _run_build(session_id: str, user_id: str, prompt: str, agent_models: d
         graph = await get_graph()
         config = {"configurable": {"thread_id": session_id}}
         final_state = await graph.ainvoke(initial_state, config=config)
+
+        if final_state.get("error"):
+            print(f"BUILD ERROR [{session_id}]: {final_state['error']}", flush=True)
+            
         status = "failed" if final_state.get("error") else "done"
         await update_session(session_id, {
             "status": status,
