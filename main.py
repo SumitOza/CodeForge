@@ -13,6 +13,7 @@ import os
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
+    from graph.runtime import close_graph
     await close_graph()
 
 
