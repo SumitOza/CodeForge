@@ -5,7 +5,11 @@ from config import settings
 
 
 def _get_key() -> bytes:
-    raw = settings.encryption_key
+    from config import settings as _s
+    raw = _s.encryption_key
+    if not raw:
+        # Local mode: use a fixed dev key (not secure, but functional)
+        return b"codeforge-local-dev-key-32bytes!"
     key_bytes = base64.urlsafe_b64decode(raw + "==")
     assert len(key_bytes) == 32, "ENCRYPTION_KEY must be 32 bytes base64-encoded"
     return key_bytes

@@ -10,8 +10,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register", response_model=TokenResponse, status_code=201)
 async def register(body: RegisterRequest):
     existing = await get_user_by_email(body.email)
-    if existing:
+    if existing and existing.get("hashed_password"):
+        # Valid existing user — email already taken
         raise HTTPException(status_code=409, detail="Email already registered")
+    if existing and not existing.get("hashed_password"):
+        # Corrupt row from a previous failed registration — delete and re-register
+        from database_cloud import get_client
+        get_client().table("users").delete().eq("email", body.email).execute()
 
     hashed = hash_password(body.password)
     user = await create_user(body.email, hashed, body.full_name)
@@ -29,7 +34,9 @@ async def register(body: RegisterRequest):
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest):
     user = await get_user_by_email(body.email)
-    if not user or not verify_password(body.password, user["hashed_password"]):
+    if not user or not user.get("hashed_password"):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not verify_password(body.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = create_access_token(user["id"], user["email"])

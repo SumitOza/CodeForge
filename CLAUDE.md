@@ -89,7 +89,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 ```bash
 pip install -r requirements.txt
-python ui/app.py
+python -m ui.app
 # Opens at http://localhost:7860
 ```
 

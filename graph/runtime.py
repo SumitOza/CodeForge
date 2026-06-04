@@ -5,29 +5,32 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from graph.builder import compile_graph
 from config import settings
 
-_graph = None
-_db_conn = None
+_connections : dict = {}
 
-
-async def get_graph():
-    """Return the compiled graph, initializing the async checkpointer on first use."""
-    global _graph, _db_conn
-    if _graph is not None:
-        return _graph
-
+async def get_graph(session_id: str = None):
+    """Return a compiled graph with an isolated checkpointer for this session."""
     os.makedirs(settings.checkpoint_dir, exist_ok=True)
-    db_path = os.path.join(settings.checkpoint_dir, "codeforge.db")
-    _db_conn = await aiosqlite.connect(db_path)
-    saver = AsyncSqliteSaver(_db_conn)
+    
+    # Use one DB file per session to fully isolate concurrent builds
+    if session_id:
+        db_path = os.path.join(settings.checkpoint_dir, f"{session_id}.db")
+    else:
+        db_path = os.path.join(settings.checkpoint_dir, "codeforge.db")
+    
+    conn = await aiosqlite.connect(db_path)
+    saver = AsyncSqliteSaver(conn)
     await saver.setup()
-    _graph = compile_graph(saver)
-    return _graph
+    graph = compile_graph(saver)
+    # Store conn so caller can close it
+    _connections[session_id or "default"] = conn
+    return graph, conn
 
 
 async def close_graph():
-    """Close the SQLite connection (app shutdown)."""
-    global _graph, _db_conn
-    _graph = None
-    if _db_conn is not None:
-        await _db_conn.close()
-        _db_conn = None
+    """Close all open connections (app shutdown)."""
+    for conn in list(_connections.values()):
+        try:
+            await conn.close()
+        except Exception:
+            pass
+    _connections.clear()

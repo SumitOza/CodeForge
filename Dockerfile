@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install "bcrypt<4.0.0" 
+RUN pip install "bcrypt<4.0.0"
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
@@ -18,6 +18,6 @@ ENV PYTHONUNBUFFERED=1 \
     OUTPUT_DIR=/data/output \
     API_BASE=http://localhost:8000/api
 
-EXPOSE 7860 8000
+EXPOSE 7860
 
 CMD ["python", "ui/app.py"]

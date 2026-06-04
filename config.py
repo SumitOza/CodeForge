@@ -2,21 +2,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
-"""config.py — centralised settings. All secrets via environment variables."""
-from pydantic_settings import BaseSettings
-from pydantic import Field
-from typing import Optional
-
-# ── validate cloud-only required fields ───────────────────────────────────────
-if not settings.is_local:
-    missing = [f for f, v in [
-        ("SUPABASE_URL", settings.supabase_url),
-        ("SUPABASE_SERVICE_KEY", settings.supabase_service_key),
-        ("ENCRYPTION_KEY", settings.encryption_key),
-    ] if not v]
-    if missing:
-        raise ValueError(f"Missing required env vars for cloud mode: {missing}")
-
 
 class Settings(BaseSettings):
     # ── Mode ──────────────────────────────────────────────────────────────────
@@ -56,41 +41,123 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+# ── validate cloud-only required fields ───────────────────────────────────────
+if not settings.is_local:
+    missing = [f for f, v in [
+        ("SUPABASE_URL", settings.supabase_url),
+        ("SUPABASE_SERVICE_KEY", settings.supabase_service_key),
+        ("ENCRYPTION_KEY", settings.encryption_key),
+    ] if not v]
+    if missing:
+        raise ValueError(f"Missing required env vars for cloud mode: {missing}")
+
 # ── Provider model catalogue ──────────────────────────────────────────────────
+#
+# CEREBRAS  (https://cloud.cerebras.ai)
+#   Free tier: 5 RPM / 150 RPH / 2,400 RPD | 30K TPM / 1M TPH / 1M TPD
+#   Context: 65,536 for gpt-oss-120b; 64,000 for zai-glm-4.7
+#   Only TWO models available on personal/free tier as of June 2026:
+#     gpt-oss-120b  — Production, 65,536 ctx
+#     zai-glm-4.7   — Preview,    64,000 ctx
+#   All Llama, Qwen3 models removed from free personal tier.
+#
+# GROQ  (https://console.groq.com)
+#   Free tier: 30 RPM / 6,000 TPM / 1,000 RPD (per model)
+#   gemma2-9b-it → deprecated Aug 2025 (replaced by llama-3.1-8b-instant)
+#   llama-3.1-8b-instant STILL valid production model
+#   deepseek-r1-distill-llama-70b → deprecated Sep 2025
+#   llama-4-maverick → deprecated Feb 2026 (replaced by openai/gpt-oss-120b)
+#   kimi-k2-instruct → deprecated Mar 2026 (replaced by openai/gpt-oss-120b)
+#   Current production models: llama-3.1-8b-instant, llama-3.3-70b-versatile,
+#                               openai/gpt-oss-120b, openai/gpt-oss-20b
+#   Current preview models:     qwen/qwen3-32b, meta-llama/llama-4-scout-17b-16e-instruct
+#
+# OPENROUTER  (https://openrouter.ai)
+#   Free tier: 20 RPM / 200 RPD per model (no credit card needed)
+#   google/gemma-3-27b-it:free → endpoint 404 (no longer available free)
+#   deepseek/deepseek-r1:free  → endpoint 404 (no longer available free)
+#   qwen/qwen3-235b-a22b:free  → endpoint 404 (no longer available free)
+#   meta-llama/llama-3.3-70b-instruct:free → still available (rate-limited upstream)
+#   New strong free options: nvidia/nemotron-3-super-120b-a12b:free,
+#                            google/gemma-4-31b-it:free, qwen/qwen3-coder:free,
+#                            openai/gpt-oss-120b:free, moonshotai/kimi-k2.6:free
+
 PROVIDER_MODELS = {
     "cerebras": [
-        {"label": "Qwen3-235B",  "model_id": "qwen-3-235b-a22b-instruct-2507", "context": 65536, "rpm": 1},
-        {"label": "Llama3.1-8B",  "model_id": "llama3.1-8b", "context": 8192,  "rpm": 30},
+        # Only two models on personal/free tier as of June 2026
+        # Production: best choice for architect, reviewer, fixer
+        {"label": "GPT-OSS-120B",  "model_id": "gpt-oss-120b",  "context": 65536, "rpm": 5},
+        # Preview: faster/cheaper, good for coder, filemanager
+        {"label": "ZAI-GLM-4.7",   "model_id": "zai-glm-4.7",   "context": 64000, "rpm": 5},
     ],
     "groq": [
-        {"label": "Llama3.3-70B",      "model_id": "llama-3.3-70b-versatile",        "context": 128000, "rpm": 30},
-        {"label": "Llama3.1-8B fast",  "model_id": "llama-3.1-8b-instant",           "context": 128000, "rpm": 30},
-        {"label": "DeepSeek-R1 70B",   "model_id": "deepseek-r1-distill-llama-70b",  "context": 128000, "rpm": 30},
-        {"label": "Gemma2-9B",         "model_id": "gemma2-9b-it",                   "context": 8192,   "rpm": 30},
+        # Production — recommended
+        {"label": "Llama3.3-70B",       "model_id": "llama-3.3-70b-versatile",                   "context": 128000, "rpm": 30},
+        {"label": "Llama3.1-8B fast",   "model_id": "llama-3.1-8b-instant",                      "context": 128000, "rpm": 30},
+        {"label": "GPT-OSS-120B",       "model_id": "openai/gpt-oss-120b",                        "context": 131072, "rpm": 30},
+        {"label": "GPT-OSS-20B",        "model_id": "openai/gpt-oss-20b",                         "context": 131072, "rpm": 30},
+        # Preview — good quality but may change
+        {"label": "Qwen3-32B preview",  "model_id": "qwen/qwen3-32b",                            "context": 131072, "rpm": 30},
+        {"label": "Llama4 Scout preview","model_id": "meta-llama/llama-4-scout-17b-16e-instruct", "context": 131072, "rpm": 30},
     ],
     "openrouter": [
-        {"label": "Llama3.3-70B free",  "model_id": "meta-llama/llama-3.3-70b-instruct:free", "context": 128000, "rpm": 20},
-        {"label": "Qwen3-235B free",    "model_id": "qwen/qwen3-235b-a22b:free",               "context": 65536,  "rpm": 20},
-        {"label": "DeepSeek-R1 free",   "model_id": "deepseek/deepseek-r1:free",               "context": 128000, "rpm": 20},
-        {"label": "Gemma3-27B free",    "model_id": "google/gemma-3-27b-it:free",              "context": 96000,  "rpm": 20},
-        {"label": "Mistral-7B free",    "model_id": "mistralai/mistral-7b-instruct:free",      "context": 32768,  "rpm": 20},
+        # Most reliable free models as of June 2026
+        {"label": "Llama3.3-70B free",      "model_id": "meta-llama/llama-3.3-70b-instruct:free",     "context": 131072, "rpm": 20},
+        {"label": "GPT-OSS-120B free",      "model_id": "openai/gpt-oss-120b:free",                   "context": 131072, "rpm": 20},
+        {"label": "Nemotron-Super-120B free","model_id": "nvidia/nemotron-3-super-120b-a12b:free",     "context": 1000000,"rpm": 20},
+        {"label": "Gemma4-31B free",         "model_id": "google/gemma-4-31b-it:free",                "context": 262144, "rpm": 20},
+        {"label": "Qwen3-Coder free",        "model_id": "qwen/qwen3-coder:free",                     "context": 1000000,"rpm": 20},
+        {"label": "Kimi-K2.6 free",          "model_id": "moonshotai/kimi-k2.6:free",                 "context": 262144, "rpm": 20},
     ],
 }
 
 DEFAULT_AGENT_MODELS = {
-    "architect":   {"provider": "cerebras",    "model_id": "qwen-3-235b-a22b-instruct-2507"},
-    "coder":       {"provider": "cerebras",    "model_id": "llama3.1-8b"},
-    "reviewer":    {"provider": "groq",        "model_id": "llama-3.3-70b-versatile"},
-    "fixer":       {"provider": "cerebras",    "model_id": "qwen-3-235b-a22b-instruct-2507"},
-    "filemanager": {"provider": "groq",        "model_id": "llama-3.3-70b-versatile"},
+    # gpt-oss-120b is the stronger production model — use for planning, reviewing, fixing
+    "architect":   {"provider": "cerebras", "model_id": "gpt-oss-120b"},
+    # zai-glm-4.7 is preview but fast — good enough for writing/saving individual files
+    "coder":       {"provider": "cerebras", "model_id": "zai-glm-4.7"},
+    # Groq has higher RPM (30 vs 5) — better for reviewer which runs once per file
+    "reviewer":    {"provider": "groq",     "model_id": "llama-3.3-70b-versatile"},
+    "fixer":       {"provider": "cerebras", "model_id": "gpt-oss-120b"},
+    "filemanager": {"provider": "groq",     "model_id": "llama-3.1-8b-instant"},
 }
 
-# Legacy IDs (old UI / docs) → current provider API ids
+# Legacy / deprecated IDs → current provider API ids
 MODEL_ALIASES = {
     "cerebras": {
-        "qwen-3-235b-a22b": "qwen-3-235b-a22b-instruct-2507",
-        "llama-3.1-8b": "llama3.1-8b",
-        "llama3.1-8b-instant": "llama3.1-8b",  # groq-style name sent to cerebras
+        # All previously available Cerebras models → nearest current equivalent
+        # Qwen3 models → gpt-oss-120b (both were large reasoning models)
+        "qwen-3-235b-a22b":                  "gpt-oss-120b",
+        "qwen-3-235b-a22b-instruct-2507":    "gpt-oss-120b",
+        "qwen-3-32b":                        "gpt-oss-120b",
+        # Llama models → zai-glm-4.7 (both were smaller/faster models)
+        "llama3.1-8b":                       "zai-glm-4.7",
+        "llama-3.1-8b":                      "zai-glm-4.7",
+        "llama3.1-8b-instant":               "zai-glm-4.7",
+        "llama-3.1-8b-instant":              "zai-glm-4.7",
+        "llama-3.3-70b":                     "gpt-oss-120b",
+        "llama3.3-70b":                      "gpt-oss-120b",
+        # zai-glm-4.7 also available under its Z.ai branding
+        "zai-org/glm-4.7":                   "zai-glm-4.7",
+    },
+    "groq": {
+        # Deprecated → replacement
+        "gemma2-9b-it":                          "llama-3.1-8b-instant",
+        "deepseek-r1-distill-llama-70b":         "openai/gpt-oss-120b",
+        "meta-llama/llama-4-maverick-17b-128e-instruct": "openai/gpt-oss-120b",
+        "moonshotai/kimi-k2-instruct":           "openai/gpt-oss-120b",
+        "moonshotai/kimi-k2-instruct-0905":      "openai/gpt-oss-120b",
+        "qwen-qwq-32b":                          "qwen/qwen3-32b",
+        "mistral-saba-24b":                      "qwen/qwen3-32b",
+    },
+    "openrouter": {
+        # Old free models that now 404 → best current replacements
+        "google/gemma-3-27b-it:free":            "google/gemma-4-31b-it:free",
+        "deepseek/deepseek-r1:free":             "openai/gpt-oss-120b:free",
+        "qwen/qwen3-235b-a22b:free":             "nvidia/nemotron-3-super-120b-a12b:free",
+        "mistralai/mistral-7b-instruct:free":    "meta-llama/llama-3.3-70b-instruct:free",
+        # Old llama format without :free suffix
+        "meta-llama/llama-3.3-70b-instruct":     "meta-llama/llama-3.3-70b-instruct:free",
     },
 }
 

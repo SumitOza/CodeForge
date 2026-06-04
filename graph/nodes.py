@@ -1,13 +1,24 @@
-"""graph/nodes.py — LangGraph node functions for each agent step."""
+"""graph/nodes.py — LangGraph node functions for each agent step.
+
+Rate-limit strategy (June 2026 free tiers):
+  Cerebras : 5 RPM → CEREBRAS_CALL_DELAY (12 s) injected in pick_file_node
+             so every file cycle starts with a fresh window.
+  Groq     : 30 RPM → no delay needed for normal builds.
+  OpenRouter: 20 RPM → no delay needed for normal builds.
+
+pick_file_node is the natural chokepoint: it runs once between every
+code→review→fix→save cycle, making it the right place to throttle.
+"""
 import json, os, asyncio
 from graph.state import CodeForgeState
 from agents.base import BaseAgent
 from agents.prompts import ARCHITECT_PROMPT, CODER_PROMPT, REVIEWER_PROMPT, FIXER_PROMPT
-from providers.factory import build_llm
+from providers.factory import build_llm, cerebras_rate_limit_sleep
 from models import ProjectPlan, FileSpec, BuildEvent, ReviewResult
 from config import DEFAULT_AGENT_MODELS
 
 import re
+
 
 def strip_fences(content: str) -> str:
     """Remove markdown code fences robustly — handles ```python, ```, CRLF, trailing newlines."""
@@ -18,6 +29,7 @@ def strip_fences(content: str) -> str:
     content = re.sub(r'\s*```\s*$', '', content)               # bare closing fence fallback
     return content.strip()
 
+
 def _build_agent(state: CodeForgeState, agent_name: str, system_prompt: str) -> BaseAgent:
     cfg = state["agent_models"].get(agent_name, DEFAULT_AGENT_MODELS[agent_name])
     provider = cfg["provider"]
@@ -25,6 +37,12 @@ def _build_agent(state: CodeForgeState, agent_name: str, system_prompt: str) -> 
     api_key = state["user_keys"].get(provider)
     llm = build_llm(provider, model_id, api_key=api_key)
     return BaseAgent(name=agent_name, llm=llm, system_prompt=system_prompt)
+
+
+def _is_cerebras_agent(state: CodeForgeState, agent_name: str) -> bool:
+    """Return True if the named agent is routed to Cerebras."""
+    cfg = state["agent_models"].get(agent_name, DEFAULT_AGENT_MODELS[agent_name])
+    return cfg.get("provider") == "cerebras"
 
 
 def _emit(state: CodeForgeState, event: BuildEvent) -> list:
@@ -59,9 +77,29 @@ async def plan_node(state: CodeForgeState) -> dict:
 
 
 async def pick_file_node(state: CodeForgeState) -> dict:
+    """Select the next pending file.
+
+    Also applies a rate-limit delay when any agent in this build uses Cerebras
+    (5 RPM = 12 s between requests). The delay runs BEFORE picking so the
+    first file in a fresh build is not delayed unnecessarily — we only sleep
+    when there are already completed/in-progress files, i.e. on the 2nd+ cycle.
+    """
     queue = [f for f in state["file_queue"] if f.status == "pending"]
     if not queue:
         return {"current_file": None}
+
+    # Apply Cerebras rate-limit delay between file cycles (not before the very first file)
+    already_processed = any(
+        f.status in ("done", "failed") for f in state["file_queue"]
+    )
+    if already_processed:
+        uses_cerebras = any(
+            state["agent_models"].get(a, DEFAULT_AGENT_MODELS[a]).get("provider") == "cerebras"
+            for a in ["coder", "fixer"]
+        )
+        if uses_cerebras:
+            await cerebras_rate_limit_sleep()
+
     next_file = queue[0]
     next_file.status = "coding"
     return {"current_file": next_file}
@@ -95,7 +133,6 @@ Write the complete content of {cf.path}:"""
 
     try:
         content = await agent.call(prompt)
-        # Strip markdown fences before review and save
         content = strip_fences(content)
         cf.content = content
         cf.status = "reviewing"
@@ -161,6 +198,10 @@ async def fix_node(state: CodeForgeState) -> dict:
     attempts = state.get("fix_attempts", 0) + 1
     agent = _build_agent(state, "fixer", FIXER_PROMPT)
     events = _emit(state, BuildEvent(type="fix_attempt", message=f"Fixer attempt {attempts} on {cf.path}", file_path=cf.path))
+
+    # Fixer is Cerebras — add intra-cycle delay so fix→review→fix doesn't burst
+    if _is_cerebras_agent(state, "fixer") and attempts > 1:
+        await cerebras_rate_limit_sleep()
 
     prompt = f"""File path: {cf.path}
 
@@ -239,7 +280,7 @@ async def mark_failed_node(state: CodeForgeState) -> dict:
                 file.status = "failed"
         events = _emit(state, BuildEvent(
             type="file_failed",
-            message=f"Giving up on {cf.path} after {state.get('fix_attempts',0)} attempts",
+            message=f"Giving up on {cf.path} after {state.get('fix_attempts', 0)} attempts",
             file_path=cf.path
         ))
         return {"current_file": None, "file_queue": queue, "events": events}

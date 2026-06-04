@@ -88,10 +88,15 @@ async def _run_build(session_id: str, user_id: str, prompt: str, agent_models: d
         "total_tokens": 0,
         "error": None,
     }
+    conn = None
     try:
-        graph = await get_graph()
+        graph, conn = await get_graph(session_id)
         config = {"configurable": {"thread_id": session_id}}
         final_state = await graph.ainvoke(initial_state, config=config)
+
+        if final_state.get("error"):
+            print(f"BUILD ERROR [{session_id}]: {final_state['error']}", flush=True)
+            
         status = "failed" if final_state.get("error") else "done"
         await update_session(session_id, {
             "status": status,
@@ -104,6 +109,12 @@ async def _run_build(session_id: str, user_id: str, prompt: str, agent_models: d
         import traceback
         traceback.print_exc()
         await update_session(session_id, {"status": "failed"})
+    finally:
+        if conn:
+            try:
+                await conn.close()
+            except Exception:
+                pass
 
 
 @router.get("/sessions")
@@ -153,6 +164,7 @@ async def download_session_files(session_id: str, current_user: dict = Depends(g
 @router.websocket("/ws/{session_id}")
 async def ws_stream(websocket: WebSocket, session_id: str):
     await websocket.accept()
+    ws_conn = None
     try:
         token = websocket.query_params.get("token")
         if not token:
@@ -161,8 +173,9 @@ async def ws_stream(websocket: WebSocket, session_id: str):
         payload = decode_token(token)
         user_id = payload["sub"]
 
-        graph = await get_graph()
+        graph, conn = await get_graph(session_id)
         config = {"configurable": {"thread_id": session_id}}
+        
         async for event in graph.astream(None, config=config):
             for node_name, state in event.items():
                 events = state.get("events", [])
@@ -175,3 +188,9 @@ async def ws_stream(websocket: WebSocket, session_id: str):
         pass
     except Exception as e:
         await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
+    finally:
+        if ws_conn:
+            try:
+                await ws_conn.close()
+            except Exception:
+                pass
