@@ -273,7 +273,7 @@ def remove_from_context(rel_path, ctx):
     return ctx, "Context cleared."
 
 
-# ── Model dropdowns ───────────────────────────────────────────────────────────
+# ── Model dropdown helpers ────────────────────────────────────────────────────
 all_providers = list(PROVIDER_MODELS.keys())
 
 def models_for(provider):
@@ -282,6 +282,12 @@ def models_for(provider):
 def update_model_choices(provider):
     choices = models_for(provider)
     return gr.update(choices=choices, value=choices[0] if choices else None)
+
+def _default_provider(agent: str) -> str:
+    return DEFAULT_AGENT_MODELS[agent]["provider"]
+
+def _default_model(agent: str) -> str:
+    return DEFAULT_AGENT_MODELS[agent]["model_id"]
 
 
 # ── Gradio UI ─────────────────────────────────────────────────────────────────
@@ -334,28 +340,64 @@ with gr.Blocks(title="CodeForge") as demo:
                     lines=4,
                 )
 
-                gr.Markdown("**Agent model configuration**")
+                gr.Markdown(
+                    "**Agent model configuration**\n\n"
+                    "> ⚠️ Cerebras free tier: **5 RPM**. Builds with many files will be throttled "
+                    "automatically (≈12 s between files). Use Groq/OpenRouter for Coder to go faster."
+                )
                 with gr.Row():
+                    # Architect — default: cerebras / gpt-oss-120b
                     with gr.Column():
-                        gr.Markdown("Architect")
-                        arch_p = gr.Dropdown(choices=all_providers, value="cerebras", label="Provider")
-                        arch_m = gr.Dropdown(choices=models_for("cerebras"),
-                                             value=models_for("cerebras")[0], label="Model")
+                        gr.Markdown("**Architect**")
+                        arch_p = gr.Dropdown(
+                            choices=all_providers,
+                            value=_default_provider("architect"),
+                            label="Provider",
+                        )
+                        arch_m = gr.Dropdown(
+                            choices=models_for(_default_provider("architect")),
+                            value=_default_model("architect"),
+                            label="Model",
+                        )
+                    # Coder — default: cerebras / zai-glm-4.7
                     with gr.Column():
-                        gr.Markdown("Coder")
-                        cod_p = gr.Dropdown(choices=all_providers, value="cerebras", label="Provider")
-                        cod_m = gr.Dropdown(choices=models_for("cerebras"),
-                                            value=models_for("cerebras")[1], label="Model")
+                        gr.Markdown("**Coder**")
+                        cod_p = gr.Dropdown(
+                            choices=all_providers,
+                            value=_default_provider("coder"),
+                            label="Provider",
+                        )
+                        cod_m = gr.Dropdown(
+                            choices=models_for(_default_provider("coder")),
+                            value=_default_model("coder"),
+                            label="Model",
+                        )
+                    # Reviewer — default: groq / llama-3.3-70b-versatile
                     with gr.Column():
-                        gr.Markdown("Reviewer")
-                        rev_p = gr.Dropdown(choices=all_providers, value="groq", label="Provider")
-                        rev_m = gr.Dropdown(choices=models_for("groq"),
-                                            value=models_for("groq")[0], label="Model")
+                        gr.Markdown("**Reviewer**")
+                        rev_p = gr.Dropdown(
+                            choices=all_providers,
+                            value=_default_provider("reviewer"),
+                            label="Provider",
+                        )
+                        rev_m = gr.Dropdown(
+                            choices=models_for(_default_provider("reviewer")),
+                            value=_default_model("reviewer"),
+                            label="Model",
+                        )
+                    # Fixer — default: cerebras / gpt-oss-120b
                     with gr.Column():
-                        gr.Markdown("Fixer")
-                        fix_p = gr.Dropdown(choices=all_providers, value="cerebras", label="Provider")
-                        fix_m = gr.Dropdown(choices=models_for("cerebras"),
-                                            value=models_for("cerebras")[0], label="Model")
+                        gr.Markdown("**Fixer**")
+                        fix_p = gr.Dropdown(
+                            choices=all_providers,
+                            value=_default_provider("fixer"),
+                            label="Provider",
+                        )
+                        fix_m = gr.Dropdown(
+                            choices=models_for(_default_provider("fixer")),
+                            value=_default_model("fixer"),
+                            label="Model",
+                        )
 
                 arch_p.change(update_model_choices, arch_p, arch_m)
                 cod_p.change(update_model_choices, cod_p,  cod_m)
@@ -442,47 +484,28 @@ with gr.Blocks(title="CodeForge") as demo:
                     run_output  = gr.Textbox(label="Run output", lines=8, visible=False, interactive=False)
                     ctx_display = gr.Markdown("")
 
-                    # Wiring
-                    load_btn.click(load_folder,   [workspace_root, token_state], [file_list, workspace_msg])
+                    load_btn.click(load_folder,    [workspace_root, token_state], [file_list, workspace_msg])
                     refresh_btn.click(load_folder, [workspace_root, token_state], [file_list, workspace_msg])
+                    file_list.change(open_file,    [file_list, workspace_root, token_state], file_editor)
+                    save_btn.click(save_file,      [file_editor, file_list, workspace_root, token_state], workspace_msg)
+                    run_btn.click(run_file,        [file_list, workspace_root, token_state], run_output)
+                    add_ctx_btn.click(add_to_context,     [file_editor, file_list, context_files_state], [context_files_state, ctx_display])
+                    rm_ctx_btn.click(remove_from_context, [file_list, context_files_state],               [context_files_state, ctx_display])
 
-                    file_list.change(open_file, [file_list, workspace_root, token_state], file_editor)
-
-                    save_btn.click(
-                        save_file,
-                        [file_editor, file_list, workspace_root, token_state],
-                        workspace_msg,
-                    )
-                    run_btn.click(
-                        run_file,
-                        [file_list, workspace_root, token_state],
-                        run_output,
-                    )
-                    add_ctx_btn.click(
-                        add_to_context,
-                        [file_editor, file_list, context_files_state],
-                        [context_files_state, ctx_display],
-                    )
-                    rm_ctx_btn.click(
-                        remove_from_context,
-                        [file_list, context_files_state],
-                        [context_files_state, ctx_display],
-                    )
-            keys_tab.select(lambda t: load_keys(t), token_state, keys_display)
+            keys_tab.select(lambda t: load_keys(t),    token_state, keys_display)
             history_tab.select(lambda t: load_sessions(t), token_state, history_display)
+
     # ── Auth wiring ───────────────────────────────────────────────────────────
     auth_outputs = [token_state, user_name, user_email,
                     auth_panel, app_panel, status_bar, li_err]
 
-    li_btn.click(handle_login, [li_email, li_pass], auth_outputs)
+    li_btn.click(handle_login,    [li_email, li_pass], auth_outputs)
     re_btn.click(handle_register, [re_name, re_email, re_pass],
                  [token_state, user_name, user_email,
                   auth_panel, app_panel, status_bar, re_err])
     logout_btn.click(handle_logout, token_state,
                      [token_state, user_name, user_email,
                       auth_panel, app_panel, status_bar, li_err])
-
-    
 
     # Auto-login in local mode
     if IS_LOCAL:
@@ -502,5 +525,5 @@ if __name__ == "__main__":
         daemon=True,
     )
     api_thread.start()
-    time.sleep(5)
+    time.sleep(2)
     demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
