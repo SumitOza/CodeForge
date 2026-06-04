@@ -122,11 +122,49 @@ def remove_key(token, provider):
     return f"Removed {provider} key.", load_keys(token)
 
 
+# ── Model dropdown helpers ────────────────────────────────────────────────────
+all_providers = list(PROVIDER_MODELS.keys())
+
+def models_for(provider):
+    return [m["model_id"] for m in PROVIDER_MODELS.get(provider, [])]
+
+def _valid_model_for(provider: str, model_id: str) -> str:
+    """
+    Return model_id if it belongs to the provider's catalogue, otherwise
+    return the first valid model for that provider.
+    This coerces stale cross-provider values to something always valid.
+    """
+    valid = models_for(provider)
+    if model_id in valid:
+        return model_id
+    return valid[0] if valid else model_id
+
+def update_model_choices(provider):
+    """Called when a provider dropdown changes. Always resets value to first valid choice."""
+    choices = models_for(provider)
+    return gr.update(choices=choices, value=choices[0] if choices else None)
+
+def _default_provider(agent: str) -> str:
+    return DEFAULT_AGENT_MODELS[agent]["provider"]
+
+def _default_model(agent: str) -> str:
+    return DEFAULT_AGENT_MODELS[agent]["model_id"]
+
+
 # ── Build handlers ────────────────────────────────────────────────────────────
 def start_build(token, prompt, arch_p, arch_m, cod_p, cod_m,
                 rev_p, rev_m, fix_p, fix_m, context_files=None):
     if not token:
         return "Please log in first.", ""
+
+    # Coerce any stale/cross-provider model values to valid ones.
+    # This prevents crashes when a user switches providers then immediately
+    # clicks Build before the dropdown change handler has resolved.
+    arch_m = _valid_model_for(arch_p, arch_m)
+    cod_m  = _valid_model_for(cod_p,  cod_m)
+    rev_m  = _valid_model_for(rev_p,  rev_m)
+    fix_m  = _valid_model_for(fix_p,  fix_m)
+
     agent_models = {
         "architect":   {"provider": arch_p, "model_id": arch_m},
         "coder":       {"provider": cod_p,  "model_id": cod_m},
@@ -273,23 +311,6 @@ def remove_from_context(rel_path, ctx):
     return ctx, "Context cleared."
 
 
-# ── Model dropdown helpers ────────────────────────────────────────────────────
-all_providers = list(PROVIDER_MODELS.keys())
-
-def models_for(provider):
-    return [m["model_id"] for m in PROVIDER_MODELS.get(provider, [])]
-
-def update_model_choices(provider):
-    choices = models_for(provider)
-    return gr.update(choices=choices, value=choices[0] if choices else None)
-
-def _default_provider(agent: str) -> str:
-    return DEFAULT_AGENT_MODELS[agent]["provider"]
-
-def _default_model(agent: str) -> str:
-    return DEFAULT_AGENT_MODELS[agent]["model_id"]
-
-
 # ── Gradio UI ─────────────────────────────────────────────────────────────────
 with gr.Blocks(title="CodeForge") as demo:
 
@@ -302,10 +323,10 @@ with gr.Blocks(title="CodeForge") as demo:
 
     # ── Header ────────────────────────────────────────────────────────────────
     gr.Markdown(
-        "**Agent model configuration**\n\n"
-        "> ⚠️ **Cerebras** free tier: **5 RPM** — throttled automatically (≈12 s between files).\n"
-        "> ✅ **Google AI** free tier: **15 RPM / 1M tokens/day** — great for Reviewer & Fixer.\n"
-        "> Use Groq or Google for Coder to avoid Cerebras rate limits."
+        "# 🔨 CodeForge\n"
+        "> ⚠️ **Cerebras** free tier: **5 RPM** — throttled automatically (≈12 s between files).  \n"
+        "> ✅ **Google AI** `gemini-2.5-flash-lite`: **1,000 RPD** — recommended for Coder & Fixer.  \n"
+        "> ⚠️ **Google AI** `gemini-2.5-flash`: only **20 RPD** free — use sparingly (Reviewer only)."
     )
     status_bar = gr.Markdown("")
 
@@ -341,67 +362,75 @@ with gr.Blocks(title="CodeForge") as demo:
                     lines=4,
                 )
 
-                gr.Markdown(
-                    "**Agent model configuration**\n\n"                    
-                )
+                gr.Markdown("**Agent model configuration**")
+
                 with gr.Row():
-                    # Architect — default: cerebras / gpt-oss-120b
+                    # Architect
                     with gr.Column():
                         gr.Markdown("**Architect**")
                         arch_p = gr.Dropdown(
                             choices=all_providers,
                             value=_default_provider("architect"),
                             label="Provider",
+                            allow_custom_value=False,
                         )
                         arch_m = gr.Dropdown(
                             choices=models_for(_default_provider("architect")),
                             value=_default_model("architect"),
                             label="Model",
+                            allow_custom_value=True,   # ← accepts stale state without crashing
                         )
-                    # Coder — default: cerebras / zai-glm-4.7
+                    # Coder
                     with gr.Column():
                         gr.Markdown("**Coder**")
                         cod_p = gr.Dropdown(
                             choices=all_providers,
                             value=_default_provider("coder"),
                             label="Provider",
+                            allow_custom_value=False,
                         )
                         cod_m = gr.Dropdown(
                             choices=models_for(_default_provider("coder")),
                             value=_default_model("coder"),
                             label="Model",
+                            allow_custom_value=True,
                         )
-                    # Reviewer — default: groq / llama-3.3-70b-versatile
+                    # Reviewer
                     with gr.Column():
                         gr.Markdown("**Reviewer**")
                         rev_p = gr.Dropdown(
                             choices=all_providers,
                             value=_default_provider("reviewer"),
                             label="Provider",
+                            allow_custom_value=False,
                         )
                         rev_m = gr.Dropdown(
                             choices=models_for(_default_provider("reviewer")),
                             value=_default_model("reviewer"),
                             label="Model",
+                            allow_custom_value=True,
                         )
-                    # Fixer — default: cerebras / gpt-oss-120b
+                    # Fixer
                     with gr.Column():
                         gr.Markdown("**Fixer**")
                         fix_p = gr.Dropdown(
                             choices=all_providers,
                             value=_default_provider("fixer"),
                             label="Provider",
+                            allow_custom_value=False,
                         )
                         fix_m = gr.Dropdown(
                             choices=models_for(_default_provider("fixer")),
                             value=_default_model("fixer"),
                             label="Model",
+                            allow_custom_value=True,
                         )
 
+                # When provider changes → repopulate model list AND reset value
                 arch_p.change(update_model_choices, arch_p, arch_m)
-                cod_p.change(update_model_choices, cod_p,  cod_m)
-                rev_p.change(update_model_choices, rev_p,  rev_m)
-                fix_p.change(update_model_choices, fix_p,  fix_m)
+                cod_p.change(update_model_choices,  cod_p,  cod_m)
+                rev_p.change(update_model_choices,  rev_p,  rev_m)
+                fix_p.change(update_model_choices,  fix_p,  fix_m)
 
                 build_btn    = gr.Button("Build project", variant="primary")
                 build_status = gr.Markdown("")
