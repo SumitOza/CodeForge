@@ -72,6 +72,15 @@ if not settings.is_local:
 #                               openai/gpt-oss-120b, openai/gpt-oss-20b
 #   Current preview models:     qwen/qwen3-32b, meta-llama/llama-4-scout-17b-16e-instruct
 #
+# GOOGLE AI (https://aistudio.google.com)
+#   Free tier (post Dec 2025 cuts, stable as of June 2026):
+#     gemini-2.5-flash-lite :  15 RPM / 1,000 RPD / 250K TPM  ← best for Coder
+#     gemini-2.5-flash      :  10 RPM /   250 RPD / 250K TPM  ← good for Reviewer
+#     gemini-2.5-pro        :   5 RPM /   100 RPD / 250K TPM  ← use sparingly
+#   Retired Feb/Mar 2026: gemini-2.0-flash
+#   Removed Dec 2025:     gemini-1.5-flash, gemini-1.5-flash-8b
+#   Context: 1,048,576 tokens for all 2.5 models
+#
 # OPENROUTER  (https://openrouter.ai)
 #   Free tier: 20 RPM / 200 RPD per model (no credit card needed)
 #   google/gemma-3-27b-it:free → endpoint 404 (no longer available free)
@@ -91,12 +100,9 @@ PROVIDER_MODELS = {
         {"label": "ZAI-GLM-4.7",   "model_id": "zai-glm-4.7",   "context": 64000, "rpm": 5},
     ],
     "google": [
-        # Free tier: 15 RPM / 1M TPD — generous for code generation
-        {"label": "Gemini 2.5 Flash",        "model_id": "gemini-2.5-flash",        "context": 1048576, "rpm": 15},
-        {"label": "Gemini 2.5 Flash-Lite",   "model_id": "gemini-2.5-flash-lite-preview-06-17", "context": 1048576, "rpm": 30},
-        {"label": "Gemini 2.0 Flash",        "model_id": "gemini-2.0-flash",        "context": 1048576, "rpm": 15},
-        {"label": "Gemini 1.5 Flash",        "model_id": "gemini-1.5-flash",        "context": 1000000, "rpm": 15},
-        {"label": "Gemini 1.5 Flash-8B",     "model_id": "gemini-1.5-flash-8b",     "context": 1000000, "rpm": 15},
+        {"label": "Gemini 2.5 Flash-Lite",  "model_id": "gemini-2.5-flash-lite",  "context": 1048576, "rpm": 15},  # 1000 RPD
+        {"label": "Gemini 2.5 Flash",       "model_id": "gemini-2.5-flash",       "context": 1048576, "rpm": 10},  # 250 RPD
+        {"label": "Gemini 2.5 Pro",         "model_id": "gemini-2.5-pro",         "context": 1048576, "rpm": 5},   # 100 RPD — use sparingly
     ],
     "groq": [
         # Production — recommended
@@ -126,18 +132,17 @@ DEFAULT_AGENT_MODELS = {
     "coder":    {"provider": "google", "model_id": "gemini-2.5-flash"},
     # Groq has higher RPM (30 vs 5) — better for reviewer which runs once per file
     "reviewer":    {"provider": "groq",     "model_id": "llama-3.3-70b-versatile"},
-    "fixer":       {"provider": "cerebras", "model_id": "gpt-oss-120b"},
+    "fixer": {"provider": "google", "model_id": "gemini-2.5-flash-lite"},
     "filemanager": {"provider": "groq",     "model_id": "llama-3.1-8b-instant"},
 }
 
 # Legacy / deprecated IDs → current provider API ids
 MODEL_ALIASES = {
     "google": {
-        # Legacy / alternate model name aliases
-        "gemini-pro":               "gemini-1.5-flash",
-        "gemini-1.0-pro":           "gemini-1.5-flash",
-        "gemini-2.5-flash-preview": "gemini-2.5-flash",
-    },
+        "gemini-2.5-pro":                     "gemini-2.5-pro",
+        "gemini-2.5-flash-preview":          "gemini-2.5-flash",
+        "gemini-2.5-flash-lite-preview-06-17": "gemini-2.5-flash-lite",
+    },  
     "cerebras": {
         # All previously available Cerebras models → nearest current equivalent
         # Qwen3 models → gpt-oss-120b (both were large reasoning models)

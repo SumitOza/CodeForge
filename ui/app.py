@@ -342,9 +342,7 @@ with gr.Blocks(title="CodeForge") as demo:
                 )
 
                 gr.Markdown(
-                    "**Agent model configuration**\n\n"
-                    "> ⚠️ Cerebras free tier: **5 RPM**. Builds with many files will be throttled "
-                    "automatically (≈12 s between files). Use Groq/OpenRouter for Coder to go faster."
+                    "**Agent model configuration**\n\n"                    
                 )
                 with gr.Row():
                     # Architect — default: cerebras / gpt-oss-120b
