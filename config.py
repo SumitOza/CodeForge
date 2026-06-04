@@ -102,7 +102,6 @@ PROVIDER_MODELS = {
     "google": [
         {"label": "Gemini 2.5 Flash-Lite",  "model_id": "gemini-2.5-flash-lite",  "context": 1048576, "rpm": 15},  # 1000 RPD
         {"label": "Gemini 2.5 Flash",       "model_id": "gemini-2.5-flash",       "context": 1048576, "rpm": 10},  # 250 RPD
-        {"label": "Gemini 2.5 Pro",         "model_id": "gemini-2.5-pro",         "context": 1048576, "rpm": 5},   # 100 RPD — use sparingly
     ],
     "groq": [
         # Production — recommended
@@ -139,7 +138,6 @@ DEFAULT_AGENT_MODELS = {
 # Legacy / deprecated IDs → current provider API ids
 MODEL_ALIASES = {
     "google": {
-        "gemini-2.5-pro":                     "gemini-2.5-pro",
         "gemini-2.5-flash-preview":          "gemini-2.5-flash",
         "gemini-2.5-flash-lite-preview-06-17": "gemini-2.5-flash-lite",
     },  
