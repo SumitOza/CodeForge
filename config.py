@@ -90,6 +90,14 @@ PROVIDER_MODELS = {
         # Preview: faster/cheaper, good for coder, filemanager
         {"label": "ZAI-GLM-4.7",   "model_id": "zai-glm-4.7",   "context": 64000, "rpm": 5},
     ],
+    "google": [
+        # Free tier: 15 RPM / 1M TPD — generous for code generation
+        {"label": "Gemini 2.5 Flash",        "model_id": "gemini-2.5-flash",        "context": 1048576, "rpm": 15},
+        {"label": "Gemini 2.5 Flash-Lite",   "model_id": "gemini-2.5-flash-lite-preview-06-17", "context": 1048576, "rpm": 30},
+        {"label": "Gemini 2.0 Flash",        "model_id": "gemini-2.0-flash",        "context": 1048576, "rpm": 15},
+        {"label": "Gemini 1.5 Flash",        "model_id": "gemini-1.5-flash",        "context": 1000000, "rpm": 15},
+        {"label": "Gemini 1.5 Flash-8B",     "model_id": "gemini-1.5-flash-8b",     "context": 1000000, "rpm": 15},
+    ],
     "groq": [
         # Production — recommended
         {"label": "Llama3.3-70B",       "model_id": "llama-3.3-70b-versatile",                   "context": 128000, "rpm": 30},
@@ -114,8 +122,8 @@ PROVIDER_MODELS = {
 DEFAULT_AGENT_MODELS = {
     # gpt-oss-120b is the stronger production model — use for planning, reviewing, fixing
     "architect":   {"provider": "cerebras", "model_id": "gpt-oss-120b"},
-    # zai-glm-4.7 is preview but fast — good enough for writing/saving individual files
-    "coder":       {"provider": "cerebras", "model_id": "zai-glm-4.7"},
+    # gemini-2.5-flash is fast — good enough for writing/saving individual files
+    "coder":    {"provider": "google", "model_id": "gemini-2.5-flash"},
     # Groq has higher RPM (30 vs 5) — better for reviewer which runs once per file
     "reviewer":    {"provider": "groq",     "model_id": "llama-3.3-70b-versatile"},
     "fixer":       {"provider": "cerebras", "model_id": "gpt-oss-120b"},
@@ -124,6 +132,12 @@ DEFAULT_AGENT_MODELS = {
 
 # Legacy / deprecated IDs → current provider API ids
 MODEL_ALIASES = {
+    "google": {
+        # Legacy / alternate model name aliases
+        "gemini-pro":               "gemini-1.5-flash",
+        "gemini-1.0-pro":           "gemini-1.5-flash",
+        "gemini-2.5-flash-preview": "gemini-2.5-flash",
+    },
     "cerebras": {
         # All previously available Cerebras models → nearest current equivalent
         # Qwen3 models → gpt-oss-120b (both were large reasoning models)

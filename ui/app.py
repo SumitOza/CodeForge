@@ -302,9 +302,10 @@ with gr.Blocks(title="CodeForge") as demo:
 
     # ── Header ────────────────────────────────────────────────────────────────
     gr.Markdown(
-        "# ⚙️ CodeForge\n"
-        "### Multi-agent AI code builder — describe any project, get working code."
-        + (" &nbsp;`LOCAL MODE`" if IS_LOCAL else "")
+        "**Agent model configuration**\n\n"
+        "> ⚠️ **Cerebras** free tier: **5 RPM** — throttled automatically (≈12 s between files).\n"
+        "> ✅ **Google AI** free tier: **15 RPM / 1M tokens/day** — great for Reviewer & Fixer.\n"
+        "> Use Groq or Google for Coder to avoid Cerebras rate limits."
     )
     status_bar = gr.Markdown("")
 
@@ -425,7 +426,10 @@ with gr.Blocks(title="CodeForge") as demo:
 
             # ── API Keys tab ─────────────────────────────────────────────────
             with gr.Tab("API Keys") as keys_tab:
-                gr.Markdown("Your keys are stored AES-256 encrypted. Only previews are shown.")
+                gr.Markdown(
+                    "Your keys are stored AES-256 encrypted. Only previews are shown.\n\n"
+                    "Get a free Google AI key at [aistudio.google.com](https://aistudio.google.com/apikey)."
+                )
                 keys_display = gr.Markdown("")
                 with gr.Row():
                     key_provider = gr.Dropdown(choices=all_providers, value="cerebras", label="Provider")

@@ -33,7 +33,7 @@ class UserProfile(BaseModel):
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
 class ApiKeyCreate(BaseModel):
-    provider: Literal["cerebras", "groq", "openrouter"]
+    provider: Literal["cerebras", "groq", "google", "openrouter"]
     key_value: str = Field(..., min_length=8)
 
 class ApiKeyResponse(BaseModel):
@@ -49,7 +49,7 @@ class ApiKeyUpdate(BaseModel):
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 class AgentModelChoice(BaseModel):
-    provider: Literal["cerebras", "groq", "openrouter"]
+    provider: Literal["cerebras", "groq","google", "openrouter"]
     model_id: str
 
 class BuildRequest(BaseModel):

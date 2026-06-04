@@ -25,7 +25,7 @@ async def start_build(body: BuildRequest, current_user: dict = Depends(get_curre
 
     # Fetch user's stored API keys
     user_keys = {}
-    for provider in ["cerebras", "groq", "openrouter"]:
+    for provider in ["cerebras", "groq", "google", "openrouter"]:
         key = await get_decrypted_key(user_id, provider)
         if key:
             user_keys[provider] = key

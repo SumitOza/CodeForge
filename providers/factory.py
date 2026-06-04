@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from config import settings, PROVIDER_MODELS, normalize_model_id
 from typing import Optional
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 # Cerebras free tier: 5 RPM = 1 request per 12 s.
 # Nodes that call Cerebras back-to-back (code → fix → code …) must await this.
@@ -50,6 +51,22 @@ def build_llm(provider: str, model_id: str, api_key: Optional[str] = None, tempe
             temperature=temperature,
             max_tokens=settings.max_tokens,
             timeout=settings.request_timeout,
+        )
+    elif provider == "google":
+        key = api_key or settings.__dict__.get("google_api_key")
+        return ChatGoogleGenerativeAI(
+            model=model_id,
+            google_api_key=key,
+            temperature=temperature,
+            max_output_tokens=settings.max_tokens,
+            timeout=settings.request_timeout,
+            # Safety settings relaxed so code with shell commands isn't blocked
+            safety_settings={
+                "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
+                "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
+                "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
+                "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
+            },
         )
 
     elif provider == "openrouter":
